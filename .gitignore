@@ -1,0 +1,9 @@
+.bsk-session
+node_modules/
+*.xlsx
+*.xls
+*.csv
+*.tsv
+*.env
+*.log
+coverage/

@@ -1,0 +1,13 @@
+{
+  "name": "form-helper-tests",
+  "version": "0.1.0",
+  "description": "Tests for the offer yuan information-filling extension Agent API.",
+  "private": true,
+  "type": "commonjs",
+  "scripts": {
+    "test": "node tests/run.js"
+  },
+  "devDependencies": {
+    "jsdom": "^24.1.3"
+  }
+}
