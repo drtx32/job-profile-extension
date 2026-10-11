@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "表单资料助手",
-  "version": "1.2.4",
+  "version": "1.2.5",
   "author": "drtx32",
   "homepage_url": "https://github.com/drtx32/job-profile-extension",
   "description": "从本地资料表快速读取字段，并辅助填写网页表单",

@@ -3,7 +3,7 @@
 一个面向 Chrome/Edge 的本地资料表填写扩展，由 [drtx32](https://github.com/drtx32) 维护。
 
 - 项目主页：<https://github.com/drtx32/job-profile-extension>
-- 当前版本：`1.2.4`
+- 当前版本：`1.2.5`
 - 配套 Agent Skill：[`job-profile`](skills/job-profile/SKILL.md)
 
 ## 功能

@@ -160,7 +160,40 @@
   }
 
   // ---- DOM mutation primitives (mirror lib/apply.js) ----
-  function setNativeFieldValue(element, value) {
+  const nativeFieldUndoStacks = new WeakMap();
+  const MAX_NATIVE_FIELD_UNDO = 20;
+
+  function isUndoableTextField(element) {
+    const tagName = String(element?.tagName || '').toLowerCase();
+    if (tagName === 'textarea') return true;
+    if (tagName !== 'input') return false;
+    return ['text', 'search', 'tel', 'url', 'email', 'number', 'date', 'month', 'time', 'datetime-local'].includes(String(element.type || 'text').toLowerCase());
+  }
+
+  function isNativeFieldUndoShortcut(event) {
+    return Boolean(event && !event.isComposing && !event.altKey && !event.shiftKey && (event.ctrlKey || event.metaKey) && String(event.key || '').toLowerCase() === 'z');
+  }
+
+  function undoLastNativeFieldFill(element) {
+    if (!isUndoableTextField(element)) return false;
+    const stack = nativeFieldUndoStacks.get(element);
+    const entry = stack?.[stack.length - 1];
+    if (!entry || String(element.value ?? '') !== entry.after) return false;
+
+    stack.pop();
+    const restored = setNativeFieldValue(element, entry.before, { recordUndo: false });
+    if (!restored) {
+      stack.push(entry);
+      return false;
+    }
+    if (entry.selection && typeof element.setSelectionRange === 'function') {
+      try { element.setSelectionRange(entry.selection.start, entry.selection.end, entry.selection.direction); } catch (_) {}
+    }
+    if (!stack.length) nativeFieldUndoStacks.delete(element);
+    return true;
+  }
+
+  function setNativeFieldValue(element, value, options = {}) {
     if (!element) return false;
     const tagName = String(element.tagName || '').toLowerCase();
     const view = element.ownerDocument && element.ownerDocument.defaultView;
@@ -172,7 +205,15 @@
     try {
       const ownDescriptor = Object.getOwnPropertyDescriptor(element, 'value');
       if (ownDescriptor && ownDescriptor.configurable) delete element.value;
-      const previous = element.value;
+      const previous = String(element.value ?? '');
+      let selection = null;
+      if (isUndoableTextField(element)) {
+        try {
+          if (typeof element.selectionStart === 'number' && typeof element.selectionEnd === 'number') {
+            selection = { start: element.selectionStart, end: element.selectionEnd, direction: element.selectionDirection || 'none' };
+          }
+        } catch (_) {}
+      }
       const nativeSetter = Object.getOwnPropertyDescriptor(prototype, 'value')?.set;
       if (nativeSetter) nativeSetter.call(element, String(value ?? ''));
       else element.value = String(value ?? '');
@@ -183,6 +224,13 @@
       if (EventCtor) {
         element.dispatchEvent(new EventCtor('input', { bubbles: true, composed: true }));
         element.dispatchEvent(new EventCtor('change', { bubbles: true, composed: true }));
+      }
+      const after = String(element.value ?? '');
+      if (options.recordUndo !== false && isUndoableTextField(element) && previous !== after) {
+        let stack = nativeFieldUndoStacks.get(element);
+        if (!stack) nativeFieldUndoStacks.set(element, stack = []);
+        stack.push({ before: previous, after, selection });
+        if (stack.length > MAX_NATIVE_FIELD_UNDO) stack.shift();
       }
       return true;
     } catch (e) { return false; }
@@ -1179,6 +1227,14 @@
 
       document.removeEventListener('keydown', this.clipboardShortcutHandler, true);
       document.addEventListener('keydown', this.clipboardShortcutHandler = async (event) => {
+        // Only consume undo when the focused field still contains the exact
+        // value last written by this extension. Otherwise the page/browser
+        // keeps its normal undo behavior (for example, undoing later typing).
+        if (isNativeFieldUndoShortcut(event) && undoLastNativeFieldFill(event.target)) {
+          event.preventDefault();
+          event.stopImmediatePropagation?.();
+          return;
+        }
         if (event.altKey && !event.ctrlKey && ['Equal', 'NumpadAdd', 'Minus', 'NumpadSubtract'].includes(event.code)) {
           event.preventDefault(); event.stopPropagation(); this.adjustFieldScale(['Equal', 'NumpadAdd'].includes(event.code) ? 0.1 : -0.1); return;
         }
